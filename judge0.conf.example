@@ -1,0 +1,15 @@
+# Judge0 PostgreSQL connection
+POSTGRES_USER=judge0
+POSTGRES_PASSWORD=judge0-local-password
+POSTGRES_DB=judge0
+POSTGRES_HOST=judge0-db
+POSTGRES_PORT=5432
+
+# Judge0 Redis connection
+REDIS_PASSWORD=judge0-redis-local-password
+REDIS_HOST=judge0-redis
+REDIS_PORT=6379
+
+# Judge0 API settings
+PORT=2358
+ENABLE_WAIT_RESULT=true

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+judge0.conf
+.DS_Store

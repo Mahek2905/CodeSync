@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String         @id @default(cuid())
+  name           String
+  email          String         @unique
+  passwordHash   String?
+  avatarUrl      String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  accounts       OAuthAccount[]
+  roomsOwned     Room[]         @relation("RoomOwner")
+  memberships    RoomMember[]
+  messages       Message[]
+}
+
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String
+  providerAccountId String
+  accessToken       String?
+  refreshToken      String?
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Room {
+  id          String       @id @default(cuid())
+  slug        String       @unique
+  name        String
+  description String?
+  ownerId     String
+  branch      String       @default("main")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  owner       User         @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     RoomMember[]
+  folders     Folder[]
+  files       File[]
+  messages    Message[]
+  executions  Execution[]
+  @@index([ownerId])
+}
+
+model RoomMember {
+  id       String   @id @default(cuid())
+  roomId   String
+  userId   String
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([roomId, userId])
+  @@index([userId])
+}
+
+model Folder {
+  id        String   @id @default(cuid())
+  roomId    String
+  parentId  String?
+  name      String
+  createdAt DateTime @default(now())
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  parent    Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Folder[] @relation("FolderTree")
+  files     File[]
+  @@index([roomId, parentId])
+}
+
+model File {
+  id        String   @id @default(cuid())
+  roomId    String
+  folderId  String?
+  name      String
+  path      String
+  language  String
+  content   String   @default("")
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  folder    Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  @@unique([roomId, path])
+  @@index([folderId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String?
+  body      String
+  createdAt DateTime @default(now())
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([roomId, createdAt])
+}
+
+model Execution {
+  id           String   @id @default(cuid())
+  roomId       String
+  userId       String?
+  language     String
+  sourceHash   String
+  status       String
+  stdin        String?
+  stdout       String?
+  stderr       String?
+  compileError String?
+  durationMs   Int?
+  createdAt    DateTime @default(now())
+  room         Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  @@index([roomId, createdAt])
+}

@@ -1,0 +1,1 @@
+{"routes":[{"path":"/","title":"CodeSync"},{"path":"/login","title":"Log in"},{"path":"/register","title":"Create account"},{"path":"/dashboard","title":"Dashboard"},{"path":"/rooms/:roomId","title":"Collaborative room"}]}
