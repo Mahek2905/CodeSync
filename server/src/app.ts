@@ -19,7 +19,7 @@ const app = express()
 
 app.use(
   cors({
-    origin: 'http://localhost:3000',
+    origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:3000',
     credentials: true,
   }),
 )
@@ -54,7 +54,12 @@ app.use((request, response, next) => {
 
 const prisma = new PrismaClient()
 const server = http.createServer(app)
-const io = new Server(server, { cors: { origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:3000' } })
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:3000',
+    credentials: true,
+  },
+})
 
 io.use(async (socket, next) => {
   try {
@@ -92,13 +97,6 @@ io.use(async (socket, next) => {
 const port = Number(process.env.PORT ?? 4000)
 const users = new Map<string, MemoryUser>()
 const rooms = new Map<string, MemoryRoom>()
-
-app.use(
-  cors({
-    origin: process.env.CLIENT_ORIGIN ?? 'http://localhost:3000',
-    credentials: true,
-  }),
-)
 
 app.use(express.json({ limit: '2mb' }))
 app.use(passport.initialize())
