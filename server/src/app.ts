@@ -455,7 +455,7 @@ app.get(
       {
         session: false,
       },
-      (error, user, info) => {
+      (error: Error | null, user: Express.User | false | null, info: unknown) => {
 
         if (error) return next(error)
 
@@ -1983,14 +1983,123 @@ app.get('/api/dashboard/stats', requireAuth, async (_request, response) => {
   }
 })
 
+const JUDGE0_PENDING_STATUSES = new Set([1, 2])
+
+// Submit code for asynchronous execution.
 app.post('/api/execution/run', requireAuth, async (request, response) => {
-  const judge0Url = process.env.JUDGE0_URL
-  if (!judge0Url) return response.status(503).json({ error: 'judge0_not_configured', message: 'Start the self-hosted Judge0 service to run code.' })
+  const judge0Url = process.env.JUDGE0_URL?.replace(/\/+$/, '')
+
+  if (!judge0Url) {
+    return response.status(503).json({
+      error: 'judge0_not_configured',
+      message: 'Code execution is not configured.',
+    })
+  }
+
+  const { language_id, source_code, stdin } = request.body ?? {}
+
+  if (
+    !Number.isInteger(language_id) ||
+    typeof source_code !== 'string' ||
+    source_code.length === 0
+  ) {
+    return response.status(400).json({
+      error: 'invalid_execution_request',
+    })
+  }
+
   try {
-    const upstream = await fetch(`${judge0Url}/submissions?base64_encoded=false&wait=true`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request.body) })
-    return response.status(upstream.status).json(await upstream.json())
-  } catch { return response.status(502).json({ error: 'judge0_unavailable' }) }
+    const upstream = await fetch(
+      `${judge0Url}/submissions?base64_encoded=false&wait=false`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          language_id,
+          source_code,
+          stdin: typeof stdin === 'string' ? stdin : '',
+        }),
+        signal: AbortSignal.timeout(15000),
+      },
+    )
+
+    const data = await upstream.json()
+
+    if (!upstream.ok) {
+      return response.status(upstream.status).json(data)
+    }
+
+    if (!data.token) {
+      return response.status(502).json({
+        error: 'judge0_invalid_response',
+      })
+    }
+
+    return response.status(202).json({
+      token: data.token,
+    })
+  } catch (error) {
+    console.error('Judge0 submission failed:', error)
+
+    return response.status(502).json({
+      error: 'judge0_unavailable',
+    })
+  }
 })
+
+// Retrieve submission status/result.
+app.get(
+  '/api/execution/:token',
+  requireAuth,
+  async (request, response) => {
+    const judge0Url = process.env.JUDGE0_URL?.replace(/\/+$/, '')
+    const tokenParam = request.params.token
+
+    const token = Array.isArray(tokenParam)
+      ? tokenParam[0]
+      : tokenParam
+
+    if (!judge0Url) {
+      return response.status(503).json({
+        error: 'judge0_not_configured',
+      })
+    }
+
+    if (!/^[a-f0-9-]{20,64}$/i.test(token)) {
+      return response.status(400).json({
+        error: 'invalid_submission_token',
+      })
+    }
+
+    try {
+      const upstream = await fetch(
+        `${judge0Url}/submissions/${encodeURIComponent(token)}?base64_encoded=false`,
+        {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(10000),
+        },
+      )
+
+      const data = await upstream.json()
+
+      if (!upstream.ok) {
+        return response.status(upstream.status).json(data)
+      }
+
+      return response.json({
+        ...data,
+        pending: JUDGE0_PENDING_STATUSES.has(data.status?.id),
+      })
+    } catch (error) {
+      console.error('Judge0 result retrieval failed:', error)
+
+      return response.status(502).json({
+        error: 'judge0_unavailable',
+      })
+    }
+  },
+)
+
 
 type GithubRepository = {
   id: number

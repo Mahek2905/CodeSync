@@ -45,6 +45,7 @@ import type {
 import { apiClient } from '../services/apiClient'
 import { createSocket } from '../services/socket'
 import { githubService, GithubRepository } from '../services/githubService'
+import { executionService } from '../services/executionService'
 
 import Avatar from '../components/common/Avatar'
 import Brand from '../components/common/Brand'
@@ -62,7 +63,7 @@ type SearchMatch = {
     line: number
     content: string
   }
-  
+
 type SearchResult = {
     id: string
     name: string
@@ -77,7 +78,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
     const [room, setRoom] = useState<Room | null>(null)
     const [files, setFiles] = useState<FileNode[]>([])
     const [activeFileId, setActiveFileId] = useState('')
-  
+
     const [createDialog, setCreateDialog] = useState<{
       open: boolean
       kind: 'file' | 'folder'
@@ -87,9 +88,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
       kind: 'file',
       parentId: null,
     })
-    
+
     const [createName, setCreateName] = useState('')
-  
+
     const [renameDialog, setRenameDialog] = useState<{
       open: boolean
       nodeId: string | null
@@ -99,7 +100,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
       nodeId: null,
       name: '',
     })
-  
+
     const [moveDialog, setMoveDialog] = useState<{
       open: boolean
       nodeId: string | null
@@ -109,7 +110,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
       nodeId: null,
       targetFolderId: null,
     })
-  
+
     const [socket, setSocket] = useState<Socket | null>(null)
     const [onlineUsers, setOnlineUsers] = useState<User[]>([])
     const [loadingRoom, setLoadingRoom] = useState(true)
@@ -120,7 +121,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
     const [chat, setChat] = useState<ChatMessage[]>([])
     const [execution, setExecution] =
     useState<'idle' | 'running' | 'success' | 'error'>('idle')
-  
+
     const [executionResult, setExecutionResult] = useState<any>(null)
     const [input, setInput] = useState('orbit-telemetry\n--verbose')
     const [showExplorer, setShowExplorer] = useState(true)
@@ -151,23 +152,23 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         fileId: string
         line: number
     } | null>(null)
-  
+
     useEffect(() => {
       if (!roomId) return
-    
+
       const loadRoom = async () => {
         try {
           setLoadingRoom(true)
-    
+
           const response = await apiClient.get(`/rooms/${roomId}`)
           const data = response.data
-    
+
           setRoom(data)
-  
+
           const messagesResponse = await apiClient.get(
             `/rooms/${roomId}/messages`,
           )
-          
+
           const savedMessages = messagesResponse.data.map((item: any) => ({
             id: item.id,
             author: item.user?.name ?? 'Unknown user',
@@ -185,16 +186,16 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             }),
             system: false,
           }))
-          
+
           setChat(savedMessages)
-  
+
           const folderNodes: FileNode[] = (data.folders ?? []).map((folder: any) => ({
             id: folder.id,
             name: folder.name,
             kind: 'folder',
             parentId: folder.parentId ?? undefined,
           }))
-          
+
           const fileNodes: FileNode[] = (data.files ?? []).map((file: any) => ({
             ...file,
             kind: 'file',
@@ -217,9 +218,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                 : 'markdown',
             modified: false,
           }))
-          
+
           setFiles([...folderNodes, ...fileNodes])
-    
+
           if (data.files?.length > 0) {
             setActiveFileId(data.files[0].id)
           }
@@ -230,33 +231,33 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           setLoadingRoom(false)
         }
       }
-    
+
       loadRoom()
     }, [roomId])
-  
+
     useEffect(() => {
       if (!roomId) return
-    
+
       const nextSocket = createSocket()
-    
+
       setSocket(nextSocket)
-    
+
       nextSocket.on('connect', () => {
         console.log('CodeSync Socket connected:', nextSocket.id)
-    
+
         nextSocket.emit('room:join', {
           roomId,
         })
       })
-    
+
       nextSocket.on('connect_error', (error) => {
         console.error('CodeSync Socket connection failed:', error.message)
       })
-    
+
       nextSocket.on('room:error', (payload) => {
         console.error('CodeSync room error:', payload)
       })
-    
+
       nextSocket.on(
         'room:presence',
         (payload: {
@@ -264,16 +265,16 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           users: User[]
         }) => {
           if (payload.roomId !== roomId) return
-    
+
           setOnlineUsers(payload.users)
-    
+
           console.log(
             'CodeSync room presence:',
             payload.users.map((person) => person.name),
           )
         },
       )
-  
+
       nextSocket.on(
         'file:change',
         (payload: {
@@ -284,7 +285,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           userId: string
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setFiles((current) =>
             current.map((file) =>
               file.id === payload.fileId
@@ -299,7 +300,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           )
         },
       )
-  
+
       nextSocket.on(
         'language:change',
         (payload: {
@@ -309,7 +310,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           userId: string
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setFiles((current) =>
             current.map((file) =>
               file.id === payload.fileId
@@ -322,7 +323,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           )
         },
       )
-  
+
       nextSocket.on(
         'file:create',
         (payload: {
@@ -330,7 +331,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           file: FileNode
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setFiles((current) => {
             // Prevent duplicates
             if (
@@ -340,7 +341,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             ) {
               return current
             }
-      
+
             return [
               ...current,
               {
@@ -354,7 +355,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           })
         },
       )
-      
+
       nextSocket.on(
         'folder:create',
         (payload: {
@@ -362,7 +363,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           folder: FileNode
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setFiles((current) => {
             // Prevent duplicates
             if (
@@ -373,7 +374,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             ) {
               return current
             }
-      
+
             return [
               ...current,
               {
@@ -386,7 +387,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           })
         },
       )
-  
+
       nextSocket.on(
         'chat:message',
         (payload: {
@@ -397,7 +398,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           text: string
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setChat((current) => [
             ...current,
             {
@@ -416,7 +417,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           ])
         },
       )
-  
+
       nextSocket.on(
         'file:delete',
         (payload: {
@@ -424,13 +425,13 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           fileId: string
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setFiles((current) =>
             current.filter(
               (file) => file.id !== payload.fileId,
             ),
           )
-      
+
           setActiveFileId((currentActiveId) =>
             currentActiveId === payload.fileId
               ? ''
@@ -438,7 +439,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           )
         },
       )
-  
+
       nextSocket.on(
         'folder:delete',
         (payload: {
@@ -446,15 +447,15 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           folderId: string
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setFiles((current) => {
             const deletedFolderIds = new Set<string>()
-      
+
             const collectChildren = (
               folderId: string,
             ) => {
               deletedFolderIds.add(folderId)
-      
+
               current
                 .filter(
                   (file) =>
@@ -465,9 +466,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                   collectChildren(child.id),
                 )
             }
-      
+
             collectChildren(payload.folderId)
-      
+
             return current
               .filter(
                 (file) =>
@@ -488,7 +489,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           })
         },
       )
-  
+
       nextSocket.on(
         'file:rename',
         (payload: {
@@ -500,7 +501,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           }
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setFiles((current) =>
             current.map((file) =>
               file.id === payload.file.id
@@ -514,7 +515,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           )
         },
       )
-  
+
       nextSocket.on(
         'folder:rename',
         (payload: {
@@ -525,7 +526,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           }
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setFiles((current) =>
             current.map((file) =>
               file.id === payload.folder.id
@@ -538,7 +539,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           )
         },
       )
-  
+
       nextSocket.on(
         'file:move',
         (payload: {
@@ -551,7 +552,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           }
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setFiles((current) =>
             current.map((file) =>
               file.id === payload.file.id
@@ -569,7 +570,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           )
         },
       )
-  
+
       nextSocket.on(
         'folder:move',
         (payload: {
@@ -585,7 +586,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           }>
         }) => {
           if (payload.roomId !== roomId) return
-      
+
           setFiles((current) =>
             current.map((file) => {
               if (file.id === payload.folder.id) {
@@ -596,16 +597,16 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                     undefined,
                 }
               }
-      
+
               const updatedFile =
                 payload.files.find(
                   (item) => item.id === file.id,
                 )
-      
+
               if (!updatedFile) {
                 return file
               }
-      
+
               return {
                 ...file,
                 parentId:
@@ -617,23 +618,23 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           )
         },
       )
-    
+
       return () => {
         nextSocket.emit('room:leave', {
           roomId,
         })
-    
+
         nextSocket.disconnect()
         setSocket(null)
         setOnlineUsers([])
       }
     }, [roomId])
-  
+
     useEffect(() => {
       const modifiedFiles = files.filter((file) => file.modified)
-    
+
       if (modifiedFiles.length === 0) return
-    
+
       const timer = window.setTimeout(async () => {
         try {
           await Promise.all(
@@ -647,7 +648,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               ),
             ),
           )
-    
+
           setFiles((current) =>
             current.map((file) =>
               modifiedFiles.some((changed) => changed.id === file.id)
@@ -655,41 +656,41 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                 : file,
             ),
           )
-    
+
           setSaveState('Saved just now')
         } catch (error) {
           console.error('Autosave failed:', error)
           setSaveState('Save failed')
         }
       }, 700)
-    
+
       return () => window.clearTimeout(timer)
     }, [files, roomId])
 
     useEffect(() => {
         const query = searchQuery.trim()
-      
+
         if (!showSearch || !roomId || !query) {
           setSearchResults([])
           setSearchLoading(false)
           setSearchError('')
           return
         }
-      
+
         let cancelled = false
-      
+
         const timer = window.setTimeout(async () => {
           try {
             setSearchLoading(true)
             setSearchError('')
-      
+
             const response = await apiClient.get(
               `/rooms/${roomId}/search`,
               {
                 params: { q: query },
               },
             )
-      
+
             if (!cancelled) {
               setSearchResults(response.data.results ?? [])
             }
@@ -705,7 +706,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             }
           }
         }, 300)
-      
+
         return () => {
           cancelled = true
           window.clearTimeout(timer)
@@ -724,9 +725,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             setShowSearch(true)
           }
         }
-      
+
         window.addEventListener('keydown', handleShortcut)
-      
+
         return () => {
           window.removeEventListener('keydown', handleShortcut)
         }
@@ -735,29 +736,29 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
     useEffect(() => {
         setCursorPosition({ line: 1, column: 1 })
       }, [activeFileId])
-  
+
     const activeFile =
         files.find(
             (file) => file.id === activeFileId && file.kind === 'file',
     ) ?? files.find((file) => file.kind === 'file')
-  
+
     const breadcrumbs = (() => {
         if (!activeFile) return []
-    
+
         const folders: string[] = []
         let parentId = activeFile.parentId
-    
+
         while (parentId) {
             const parentFolder = files.find(
                 (file) => file.id === parentId && file.kind === 'folder'
             )
-    
+
             if (!parentFolder) break
-    
+
             folders.unshift(parentFolder.name)
             parentId = parentFolder.parentId
         }
-    
+
         return [...folders, activeFile.name]
     })()
 
@@ -769,25 +770,25 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         ) {
             return
         }
-        
+
         const editor = editorRef.current
-        
+
         editor.revealLineInCenter(pendingSearchMatch.line)
-        
+
         editor.setPosition({
             lineNumber: pendingSearchMatch.line,
             column: 1,
         })
-        
+
         editor.focus()
-        
+
         setPendingSearchMatch(null)
     }, [activeFileId, pendingSearchMatch])
-  
+
     const activeLanguage = activeFile?.language ?? 'typescript'
-  
+
     const canGithub = user.provider === 'github'
-  
+
     const editorLanguageMap: Record<Language, string> = {
       typescript: 'typescript',
       javascript: 'javascript',
@@ -803,14 +804,14 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
       c: 'c',
       go: 'go',
     }
-    
+
     const editorLanguage = editorLanguageMap[activeLanguage] ?? 'plaintext'
-  
+
     const fileTree = useMemo(
       () => files.filter((file) => !file.parentId),
       [files],
     )
-  
+
     if (loadingRoom) {
       return (
         <main className="room-page">
@@ -822,7 +823,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         </main>
       )
     }
-    
+
     if (!room) {
       return (
         <main className="room-page">
@@ -836,7 +837,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         </main>
       )
     }
-    
+
     if (!activeFile) {
       return (
         <main className="room-page">
@@ -848,7 +849,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         </main>
       )
     }
-  
+
     const updateFile = (value: string) => {
       setFiles((current) =>
         current.map((file) =>
@@ -861,14 +862,14 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             : file,
         ),
       )
-    
+
       setSaveState('Saving…')
-    
+
       if (socket?.connected && roomId && activeFileId) {
         const currentFile = files.find(
           (file) => file.id === activeFileId,
         )
-    
+
         socket.emit('file:change', {
           roomId,
           fileId: activeFileId,
@@ -877,7 +878,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         })
       }
     }
-  
+
     const updateLanguage = (language: Language) => {
       setFiles((current) =>
         current.map((file) =>
@@ -890,7 +891,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             : file,
         ),
       )
-    
+
       if (socket?.connected && roomId && activeFileId) {
         socket.emit('language:change', {
           roomId,
@@ -898,10 +899,10 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           language,
         })
       }
-    
+
       setSaveState('Saving…')
     }
-  
+
     const openCreateDialog = (
       kind: 'file' | 'folder',
       parentId: string | null = null,
@@ -913,7 +914,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         parentId,
       })
     }
-    
+
     const closeCreateDialog = () => {
       setCreateDialog({
         open: false,
@@ -922,10 +923,10 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
       })
       setCreateName('')
     }
-    
+
     const createNode = async () => {
       const name = createName.trim()
-    
+
       if (!name) {
         setToast(
           createDialog.kind === 'file'
@@ -934,10 +935,10 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         )
         return
       }
-    
+
       try {
         setToast(`Creating ${createDialog.kind}…`)
-    
+
         if (createDialog.kind === 'folder') {
           const response = await apiClient.post(
             `/rooms/${roomId}/folders`,
@@ -946,9 +947,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               parentId: createDialog.parentId,
             },
           )
-    
+
           const folder = response.data
-    
+
           setFiles((current) => [
             ...current,
             {
@@ -958,7 +959,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               parentId: folder.parentId ?? undefined,
             },
           ])
-          
+
           if (socket?.connected && roomId) {
             socket.emit('folder:create', {
               roomId,
@@ -969,13 +970,13 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               },
             })
           }
-          
+
           setToast(`${folder.name} created`)
         } else {
           const extension = name.includes('.')
             ? name.split('.').pop()?.toLowerCase()
             : 'typescript'
-    
+
           const languageMap: Record<string, Language> = {
             ts: 'typescript',
             tsx: 'typescript',
@@ -993,10 +994,10 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             c: 'c',
             go: 'go',
           }
-    
+
           const language =
             languageMap[extension ?? ''] ?? 'typescript'
-    
+
           const response = await apiClient.post(
             `/rooms/${roomId}/files`,
             {
@@ -1009,9 +1010,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               folderId: createDialog.parentId,
             },
           )
-    
+
           const file = response.data
-    
+
           const newFile: FileNode = {
             ...file,
             kind: 'file',
@@ -1019,63 +1020,63 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             language,
             modified: false,
           }
-    
+
           setFiles((current) => [...current, newFile])
           setActiveFileId(file.id)
-  
+
           if (socket?.connected && roomId) {
             socket.emit('file:create', {
               roomId,
               file: newFile,
             })
           }
-    
+
           setToast(`${file.name} created`)
         }
-    
+
         closeCreateDialog()
-    
+
         window.setTimeout(() => setToast(''), 2200)
       } catch (error: any) {
         console.error(
           `Failed to create ${createDialog.kind}:`,
           error,
         )
-    
+
         setToast(
           error?.response?.data?.error ??
             `Failed to create ${createDialog.kind}`,
         )
-    
+
         window.setTimeout(() => setToast(''), 2600)
       }
     }
-  
+
     const deleteNode = async (id: string) => {
       const node = files.find((file) => file.id === id)
-    
+
       if (!node) return
-    
+
       try {
         setToast(`Deleting ${node.name}…`)
-    
+
         if (node.kind === 'folder') {
           await apiClient.delete(
             `/rooms/${roomId}/folders/${node.id}`,
           )
-  
+
           if (socket?.connected && roomId) {
             socket.emit('folder:delete', {
               roomId,
               folderId: node.id,
             })
           }
-    
+
           const folderIdsToRemove = new Set<string>()
-    
+
           const collectFolderIds = (folderId: string) => {
             folderIdsToRemove.add(folderId)
-    
+
             files
               .filter(
                 (file) =>
@@ -1086,9 +1087,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                 collectFolderIds(child.id),
               )
           }
-    
+
           collectFolderIds(node.id)
-    
+
           setFiles((current) =>
             current
               .filter(
@@ -1112,64 +1113,64 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           await apiClient.delete(
             `/rooms/${roomId}/files/${node.id}`,
           )
-  
+
           if (socket?.connected && roomId) {
             socket.emit('file:delete', {
               roomId,
               fileId: node.id,
             })
           }
-        
+
           setFiles((current) =>
             current.filter((file) => file.id !== node.id),
           )
-        
+
           if (activeFileId === node.id) {
             const remainingFiles = files.filter(
               (file) =>
                 file.kind === 'file' &&
                 file.id !== node.id,
             )
-        
+
             setActiveFileId(
               remainingFiles[0]?.id ?? '',
             )
           }
         }
-    
+
         setToast(`${node.name} deleted`)
-    
+
         window.setTimeout(
           () => setToast(''),
           2200,
         )
       } catch (error: any) {
         console.error('Failed to delete node:', error)
-    
+
         setToast(
           error?.response?.data?.error ??
             `Failed to delete ${node.name}`,
         )
-    
+
         window.setTimeout(
           () => setToast(''),
           2600,
         )
       }
     }
-  
+
     const renameNode = (id: string) => {
       const node = files.find((file) => file.id === id)
-    
+
       if (!node) return
-    
+
       setRenameDialog({
         open: true,
         nodeId: id,
         name: node.name,
       })
     }
-  
+
     const closeRenameDialog = () => {
       setRenameDialog({
         open: false,
@@ -1177,24 +1178,24 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         name: '',
       })
     }
-    
+
     const confirmRename = async () => {
       const node = files.find(
         (file) => file.id === renameDialog.nodeId,
       )
-    
+
       const newName = renameDialog.name.trim()
-    
+
       if (!node || !newName) return
-    
+
       if (newName === node.name) {
         closeRenameDialog()
         return
       }
-    
+
       try {
         setToast(`Renaming ${node.name}…`)
-    
+
         if (node.kind === 'folder') {
           const response = await apiClient.patch(
             `/rooms/${roomId}/folders/${node.id}`,
@@ -1202,9 +1203,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               name: newName,
             },
           )
-    
+
           const folder = response.data
-    
+
           setFiles((current) =>
             current.map((file) =>
               file.id === node.id
@@ -1215,7 +1216,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                 : file,
             ),
           )
-    
+
           if (socket?.connected && roomId) {
             socket.emit('folder:rename', {
               roomId,
@@ -1227,18 +1228,18 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           }
         } else {
           const oldPath = node.path ?? node.name
-    
+
           const lastSlash = oldPath.lastIndexOf('/')
-    
+
           const directory =
             lastSlash >= 0
               ? oldPath.slice(0, lastSlash)
               : ''
-    
+
           const newPath = directory
             ? `${directory}/${newName}`
             : newName
-    
+
           const response = await apiClient.patch(
             `/rooms/${roomId}/files/${node.id}`,
             {
@@ -1246,9 +1247,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               path: newPath,
             },
           )
-    
+
           const file = response.data
-    
+
           setFiles((current) =>
             current.map((currentFile) =>
               currentFile.id === node.id
@@ -1260,7 +1261,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                 : currentFile,
             ),
           )
-    
+
           if (socket?.connected && roomId) {
             socket.emit('file:rename', {
               roomId,
@@ -1272,37 +1273,37 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             })
           }
         }
-    
+
         closeRenameDialog()
-    
+
         setToast(`${newName} renamed`)
-    
+
         window.setTimeout(
           () => setToast(''),
           2200,
         )
       } catch (error: any) {
         console.error('Failed to rename:', error)
-    
+
         setToast(
           error?.response?.data?.error ??
             `Failed to rename ${node.name}`,
         )
-    
+
         window.setTimeout(
           () => setToast(''),
           2600,
         )
       }
     }
-  
+
     const moveNode = (id: string) => {
       const node = files.find(
         (file) => file.id === id,
       )
-    
+
       if (!node) return
-    
+
       setMoveDialog({
         open: true,
         nodeId: id,
@@ -1310,7 +1311,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           node.parentId ?? null,
       })
     }
-  
+
     const closeMoveDialog = () => {
       setMoveDialog({
         open: false,
@@ -1318,34 +1319,34 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         targetFolderId: null,
       })
     }
-  
+
     const confirmMove = async () => {
       const node = files.find(
         (file) => file.id === moveDialog.nodeId,
       )
-    
+
       if (!node) return
-    
+
       const targetFolderId =
         moveDialog.targetFolderId
-    
+
       // Can't move a node into itself.
       if (targetFolderId === node.id) {
         setToast(
           'An item cannot be moved inside itself.',
         )
-    
+
         window.setTimeout(
           () => setToast(''),
           2200,
         )
-    
+
         return
       }
-    
+
       try {
         setToast(`Moving ${node.name}…`)
-    
+
         if (node.kind === 'folder') {
           const response = await apiClient.patch(
             `/rooms/${roomId}/folders/${node.id}/move`,
@@ -1353,9 +1354,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               parentId: targetFolderId,
             },
           )
-    
+
           const result = response.data
-    
+
           setFiles((current) =>
             current.map((file) => {
               if (file.id === node.id) {
@@ -1366,17 +1367,17 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                     undefined,
                 }
               }
-    
+
               const updatedFile =
                 result.files?.find(
                   (item: any) =>
                     item.id === file.id,
                 )
-    
+
               if (!updatedFile) {
                 return file
               }
-    
+
               return {
                 ...file,
                 path: updatedFile.path,
@@ -1386,7 +1387,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               }
             }),
           )
-    
+
           if (socket?.connected && roomId) {
             socket.emit('folder:move', {
               roomId,
@@ -1407,11 +1408,11 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                   file.id === targetFolderId,
               )
             : null
-    
+
           const newPath = targetFolder
             ? `${targetFolder.name}/${node.name}`
             : node.name
-    
+
           const response = await apiClient.patch(
             `/rooms/${roomId}/files/${node.id}`,
             {
@@ -1419,9 +1420,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               path: newPath,
             },
           )
-    
+
           const updatedFile = response.data
-    
+
           setFiles((current) =>
             current.map((file) =>
               file.id === node.id
@@ -1435,7 +1436,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                 : file,
             ),
           )
-    
+
           if (socket?.connected && roomId) {
             socket.emit('file:move', {
               roomId,
@@ -1452,11 +1453,11 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             })
           }
         }
-    
+
         closeMoveDialog()
-    
+
         setToast(`${node.name} moved`)
-    
+
         window.setTimeout(
           () => setToast(''),
           2200,
@@ -1466,23 +1467,25 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           'Failed to move item:',
           error,
         )
-    
+
         setToast(
           error?.response?.data?.error ??
             `Failed to move ${node.name}`,
         )
-    
+
         window.setTimeout(
           () => setToast(''),
           2600,
         )
       }
     }
-  
+
+
     const runWorkspace = async () => {
       setExecution('running')
+      setExecutionResult(null)
       setBottomTab('output')
-  
+
       try {
         const languageIds: Partial<Record<Language, number>> = {
           javascript: 63,
@@ -1490,9 +1493,9 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           python: 71,
           rust: 73,
         }
-        
+
         const languageId = languageIds[activeLanguage]
-        
+
         if (!languageId) {
           setExecution('error')
           setExecutionResult({
@@ -1500,62 +1503,95 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           })
           return
         }
-  
+
         const sourceCode = activeFile.content ?? ''
-  
-        const response = await apiClient.post('/execution/run', {
-          language_id: languageIds[activeLanguage],
+
+        // Step 1: Submit code to Judge0.
+        const submission = await executionService.run({
+          language_id: languageId,
           source_code: sourceCode,
           stdin: input,
         })
-  
-        const result = response.data
-  
-        console.log('Judge0 result:', result)
-  
-        if (
-          result.status?.id === 3 &&
-          !result.stderr &&
-          !result.compile_output
-        ) {
-          setExecution('success')
-        } else {
-          setExecution('error')
+
+        const token = submission.data.token
+
+        if (!token) {
+          throw new Error('Judge0 did not return a submission token.')
         }
-  
-        setExecutionResult(result)
-      } catch (error) {
+
+        // Step 2: Poll for the execution result.
+        const maxAttempts = 30
+        const pollingInterval = 2000
+
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          await new Promise((resolve) =>
+            window.setTimeout(resolve, pollingInterval),
+          )
+
+          const response = await executionService.getResult(token)
+          const result = response.data
+
+          console.log('Judge0 result:', result)
+
+          if (result.pending) {
+            continue
+          }
+
+          // Step 3: Display the completed result.
+          setExecutionResult(result)
+
+          if (result.status?.id === 3) {
+            setExecution('success')
+          } else {
+            setExecution('error')
+          }
+
+          return
+        }
+
+        throw new Error('Execution timed out. Please try again.')
+      } catch (error: any) {
         console.error('Execution failed:', error)
+
         setExecution('error')
+
+        setExecutionResult({
+          stderr:
+            error?.response?.data?.message ??
+            error?.response?.data?.error ??
+            error?.message ??
+            'Failed to execute code.',
+        })
       }
     }
-  
+
+
     const sendMessage = (event: React.FormEvent) => {
       event.preventDefault()
-    
+
       const text = message.trim()
-    
+
       if (!text) return
-    
+
       if (!socket?.connected || !roomId) {
         setToast('Chat connection unavailable')
         window.setTimeout(() => setToast(''), 2200)
         return
       }
-    
+
       socket.emit('chat:message', {
         roomId,
         text,
       })
-    
+
       setMessage('')
     }
-  
+
     const copyRoom = async () => {
       // const inviteUrl = `${window.location.origin}/rooms/${room.id}`
-  
+
       await navigator.clipboard.writeText(room.id)
-  
+
       setToast('Room link copied')
       window.setTimeout(() => setToast(''), 2200)
     }
@@ -1563,13 +1599,13 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
     const openGithubModal = async () => {
         setShowGithub(true)
         setLoadingRepositories(true)
-        
+
         try {
             const response = await githubService.repositories()
             const repositories = response.data
-        
+
             setGithubRepositories(repositories)
-        
+
             if (repositories.length > 0) {
             setGithubRepo((current) =>
                 repositories.some((repo) => repo.full_name === current)
@@ -1581,48 +1617,48 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             }
         } catch (error: any) {
             console.error('Failed to fetch GitHub repositories:', error)
-        
+
             setShowGithub(false)
-        
+
             setToast(
             error?.response?.data?.message ??
                 'Unable to fetch GitHub repositories',
             )
-        
+
             window.setTimeout(() => setToast(''), 2600)
         } finally {
             setLoadingRepositories(false)
         }
     }
-  
+
     const commit = async () => {
         if (!roomId || !githubRepo) {
           setToast('Select a repository first')
           return
         }
-      
+
         const selectedRepository = githubRepositories.find(
           (repository) => repository.full_name === githubRepo,
         )
-      
+
         if (!selectedRepository?.default_branch) {
           setToast('Unable to determine the repository default branch')
           return
         }
-      
+
         if (!commitMessage.trim()) {
           setToast('Enter a commit message')
           return
         }
-      
+
         try {
           setIsCommitting(true)
-      
+
           // Make sure all pending workspace changes are saved first.
           const modifiedFiles = files.filter(
             (file) => file.kind === 'file' && file.modified,
           )
-      
+
           await Promise.all(
             modifiedFiles.map((file) =>
               apiClient.patch(`/rooms/${roomId}/files/${file.id}`, {
@@ -1631,7 +1667,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               }),
             ),
           )
-      
+
           // Update the local modified flags after saving.
           setFiles((current) =>
             current.map((file) =>
@@ -1640,7 +1676,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                 : file,
             ),
           )
-      
+
           // Create the actual GitHub commit.
           const response = await githubService.commitWorkspace({
             roomId,
@@ -1648,26 +1684,26 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             branch: selectedRepository.default_branch,
             message: commitMessage.trim(),
           })
-      
+
           const result = response.data
-      
+
           setShowGithub(false)
           setToast(
             `Successfully committed ${result.filesCommitted} files to GitHub!`,
           )
-      
+
           console.log('GitHub commit successful:', result)
-      
+
           window.setTimeout(() => setToast(''), 3500)
         } catch (error: any) {
           console.error('GitHub commit failed:', error)
-      
+
           setToast(
             error?.response?.data?.message ??
               error?.response?.data?.error ??
               'GitHub commit failed',
           )
-      
+
           window.setTimeout(() => setToast(''), 3500)
         } finally {
           setIsCommitting(false)
@@ -1676,7 +1712,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
 
     const handleEditorMount = (editor: any) => {
         editorRef.current = editor
-        
+
         editor.onDidChangeCursorPosition(
             ({ position }: {
             position: { lineNumber: number; column: number }
@@ -1691,15 +1727,15 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
 
     const openSearchResult = (result: SearchResult) => {
         const line = result.matches[0]?.line ?? 1
-      
+
         setActiveFileId(result.id)
-      
+
         setPendingSearchMatch({
           fileId: result.id,
           line,
         })
     }
-  
+
     return <main className="room-page"><header className="room-topbar"><Brand compact /><div className="room-topbar__crumbs"><ChevronRight size={14} /><span className="room-breadcrumb">Rooms</span><ChevronRight size={14} /><strong>{room.name}</strong><span className="room-id-badge">{room.id}</span></div><div className="room-topbar__actions"><span className="room-connected"><Wifi size={14} /> Connected</span><div className="room-topbar__avatars">
     {onlineUsers.slice(0, 3).map((person) => (
       <Avatar
@@ -1720,7 +1756,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         size="xs"
       />
     ))}
-  
+
     {onlineUsers.length > 3 && (
       <span className="more-avatar">
         +{onlineUsers.length - 3}
@@ -1766,7 +1802,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
                 <FileCode2 size={14} />
                 <span>{result.name}</span>
             </button>
-  
+
             {result.matches.map((match, index) => (
               <button
                 key={`${result.id}-${match.line}-${index}`}
@@ -1826,7 +1862,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
     <Search size={14} /> Search <kbd>Ctrl + Shift + F</kbd>
   </button>
 )}<button className="commandbar-action" onClick={() => setShowCollab(!showCollab)}><Users size={14} /> Collaborators</button>
-{/* <kbd>⌘ ↵</kbd> */}<button className="commandbar-action commandbar-action--run" onClick={runWorkspace}><Play size={14} fill="currentColor" /> Run </button><button className="commandbar-toggle" onClick={() => setShowCollab(!showCollab)} title="Toggle collaboration panel"><PanelRightClose size={15} /></button></div></div><div className="room-body">{showExplorer && <aside className="explorer-panel"><div className="panel-heading"> 
+{/* <kbd>⌘ ↵</kbd> */}<button className="commandbar-action commandbar-action--run" onClick={runWorkspace}><Play size={14} fill="currentColor" /> Run </button><button className="commandbar-toggle" onClick={() => setShowCollab(!showCollab)} title="Toggle collaboration panel"><PanelRightClose size={15} /></button></div></div><div className="room-body">{showExplorer && <aside className="explorer-panel"><div className="panel-heading">
   <span>Explorer</span>
   <div>
     <button
@@ -1913,7 +1949,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         >
           <X size={17} />
         </button>
-  
+
         <div className="github-modal__head">
           <span className="github-logo">
             {createDialog.kind === 'file' ? (
@@ -1922,23 +1958,23 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               <FolderPlus size={22} />
             )}
           </span>
-  
+
           <div>
             <span className="eyebrow">
               EXPLORER
             </span>
-  
+
             <h2>
               Create {createDialog.kind}
             </h2>
           </div>
         </div>
-  
+
         <label>
           {createDialog.kind === 'file'
             ? 'File name'
             : 'Folder name'}
-  
+
           <input
             autoFocus
             value={createName}
@@ -1949,7 +1985,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               if (event.key === 'Enter') {
                 createNode()
               }
-  
+
               if (event.key === 'Escape') {
                 closeCreateDialog()
               }
@@ -1961,7 +1997,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             }
           />
         </label>
-  
+
         <div className="github-modal__foot">
           <button
             className="button button--quiet"
@@ -1969,7 +2005,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           >
             Cancel
           </button>
-  
+
           <button
             className="button button--primary"
             onClick={createNode}
@@ -1979,7 +2015,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             ) : (
               <FolderPlus size={15} />
             )}
-  
+
             Create
           </button>
         </div>
@@ -1994,24 +2030,24 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         >
           <X size={17} />
         </button>
-  
+
         <div className="github-modal__head">
           <span className="github-logo">
             <Pencil size={21} />
           </span>
-  
+
           <div>
             <span className="eyebrow">
               EXPLORER
             </span>
-  
+
             <h2>Rename item</h2>
           </div>
         </div>
-  
+
         <label>
           New name
-  
+
           <input
             autoFocus
             value={renameDialog.name}
@@ -2025,14 +2061,14 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               if (event.key === 'Enter') {
                 confirmRename()
               }
-  
+
               if (event.key === 'Escape') {
                 closeRenameDialog()
               }
             }}
           />
         </label>
-  
+
         <div className="github-modal__foot">
           <button
             className="button button--quiet"
@@ -2040,7 +2076,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           >
             Cancel
           </button>
-  
+
           <button
             className="button button--primary"
             onClick={confirmRename}
@@ -2060,24 +2096,24 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
         >
           <X size={17} />
         </button>
-  
+
         <div className="github-modal__head">
           <span className="github-logo">
             <FolderInput size={21} />
           </span>
-  
+
           <div>
             <span className="eyebrow">
               EXPLORER
             </span>
-  
+
             <h2>Move file</h2>
           </div>
         </div>
-  
+
         <label>
           Move to
-  
+
           <select
             value={moveDialog.targetFolderId ?? ''}
             onChange={(event) =>
@@ -2091,7 +2127,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
             <option value="">
               Workspace root
             </option>
-  
+
             {files
               .filter(
                 (file) =>
@@ -2115,7 +2151,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
               ))}
           </select>
         </label>
-  
+
         <div className="github-modal__foot">
           <button
             className="button button--quiet"
@@ -2123,7 +2159,7 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
           >
             Cancel
           </button>
-  
+
           <button
             className="button button--primary"
             onClick={confirmMove}
@@ -2143,21 +2179,21 @@ export default function RoomPage({ user, onLogout }: { user: User; onLogout: () 
     files: FileNode[],
   ): boolean {
     if (!parentId) return false
-  
+
     let current = files.find(
       (file) => file.id === candidateId,
     )
-  
+
     while (current?.parentId) {
       if (current.parentId === parentId) {
         return true
       }
-  
+
       current = files.find(
         (file) =>
           file.id === current?.parentId,
       )
     }
-  
+
     return false
   }
